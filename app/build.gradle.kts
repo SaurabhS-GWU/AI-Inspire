@@ -65,6 +65,9 @@ dependencies {
     // Gemini SDK
     implementation("com.google.ai.client.generativeai:generativeai:0.1.1")
     
+    // Add SwipeRefresh dependency
+    implementation("com.google.accompanist:accompanist-swiperefresh:0.32.0")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

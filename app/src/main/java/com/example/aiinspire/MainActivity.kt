@@ -20,6 +20,8 @@ import com.example.aiinspire.ui.theme.AIInspireTheme
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.GenerateContentResponse
 import kotlinx.coroutines.launch
+import com.google.accompanist.swiperefresh.SwipeRefresh
+import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 
 // Data class to represent quote categories
 data class QuoteCategory(
@@ -88,6 +90,7 @@ fun WelcomeScreen() {
     var quotes by remember { mutableStateOf<List<Quote>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var showCategorySelection by remember { mutableStateOf(true) }
+    var isRefreshing by remember { mutableStateOf(false) }
     
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -98,6 +101,25 @@ fun WelcomeScreen() {
             modelName = "gemini-2.0-flash",
             apiKey = BuildConfig.GEMINI_API_KEY
         )
+    }
+
+    // Function to generate quotes
+    suspend fun generateQuotes() {
+        try {
+            val prompt = """
+                Generate 10 unique, inspiring quotes related to ${selectedCategory?.name}.
+                The quotes should be relevant to ${selectedCategory?.description}.
+                Format each quote on a new line.
+                Make the quotes concise, impactful, and memorable.
+                Do not include attribution or authors.
+            """.trimIndent()
+            
+            val response = generativeModel.generateContent(prompt)
+            val quotesText = response.text?.split("\n")?.filter { it.isNotEmpty() } ?: emptyList()
+            quotes = quotesText.map { Quote(it.trim(), selectedCategory?.name ?: "") }
+        } catch (e: Exception) {
+            snackbarHostState.showSnackbar("Error: ${e.message}")
+        }
     }
 
     Scaffold(
@@ -217,20 +239,8 @@ fun WelcomeScreen() {
                                 }
                                 isLoading = true
                                 try {
-                                    val prompt = """
-                                        Generate 10 unique, inspiring quotes related to ${selectedCategory?.name}.
-                                        The quotes should be relevant to ${selectedCategory?.description}.
-                                        Format each quote on a new line.
-                                        Make the quotes concise, impactful, and memorable.
-                                        Do not include attribution or authors.
-                                    """.trimIndent()
-                                    
-                                    val response = generativeModel.generateContent(prompt)
-                                    val quotesText = response.text?.split("\n")?.filter { it.isNotEmpty() } ?: emptyList()
-                                    quotes = quotesText.map { Quote(it.trim(), selectedCategory?.name ?: "") }
+                                    generateQuotes()
                                     showCategorySelection = false
-                                } catch (e: Exception) {
-                                    snackbarHostState.showSnackbar("Error: ${e.message}")
                                 } finally {
                                     isLoading = false
                                 }
@@ -250,27 +260,66 @@ fun WelcomeScreen() {
                     }
                 }
             } else {
-                // Quotes List UI
-                LazyColumn(
+                // Category Header
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = selectedCategory?.name ?: "",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = selectedCategory?.description ?: "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                // Quotes List with SwipeRefresh
+                SwipeRefresh(
+                    state = rememberSwipeRefreshState(isRefreshing),
+                    onRefresh = {
+                        scope.launch {
+                            isRefreshing = true
+                            generateQuotes()
+                            isRefreshing = false
+                        }
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .padding(16.dp)
                 ) {
-                    items(quotes) { quote ->
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            shape = MaterialTheme.shapes.medium
-                        ) {
-                            Text(
-                                text = quote.text,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(16.dp),
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        items(quotes) { quote ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Text(
+                                    text = quote.text,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.padding(16.dp),
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
                         }
                     }
                 }
